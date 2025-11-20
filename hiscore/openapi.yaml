@@ -1,0 +1,664 @@
+openapi: 3.0.3
+info:
+  title: HiScore Queueable Tasks and LLM-Chart API
+  version: 1.0.0
+  description: |
+    Formal API for long-running music processing tasks with a unified queueing interface,
+    plus immediate operations. Includes the LLM-Chart AST types.
+servers:
+  - url: http://localhost:8000
+    description: Local development server
+tags:
+  - name: tasks
+    description: Queueable, long-running tasks exposed via enqueue/status/result endpoints
+  - name: operations
+    description: Immediate operations returning results synchronously
+  - name: llm-chart
+    description: LLM-Chart schemas and examples
+paths:
+  /tasks/audio-separation/enqueue:
+    post:
+      tags: [tasks]
+      summary: Enqueue audio separation
+      description: Separate instruments/stems from an input audio file.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AudioSeparationEnqueueForm'
+      responses:
+        '202':
+          description: Job enqueued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobEnqueueResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '500': { $ref: '#/components/responses/ServerError' }
+  /tasks/audio-separation/status/{jobId}:
+    get:
+      tags: [tasks]
+      summary: Get audio separation job status
+      parameters:
+        - $ref: '#/components/parameters/JobIdParam'
+      responses:
+        '200':
+          description: Job status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobStatusResponse'
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+  /tasks/audio-separation/result/{jobId}:
+    get:
+      tags: [tasks]
+      summary: Get audio separation result
+      parameters:
+        - $ref: '#/components/parameters/JobIdParam'
+      responses:
+        '200':
+          description: Separation outputs with URLs to .opus files
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AudioSeparationResult'
+        '202': { $ref: '#/components/responses/JobNotReady' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /tasks/audio-transcription/enqueue:
+    post:
+      tags: [tasks]
+      summary: Enqueue audio transcription
+      description: Transcribe an input audio file for a given instrument into MIDI.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AudioTranscriptionEnqueueForm'
+      responses:
+        '202': { content: { application/json: { schema: { $ref: '#/components/schemas/JobEnqueueResponse' } } }, description: Job enqueued }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '500': { $ref: '#/components/responses/ServerError' }
+  /tasks/audio-transcription/status/{jobId}:
+    get:
+      tags: [tasks]
+      summary: Get audio transcription job status
+      parameters:
+        - $ref: '#/components/parameters/JobIdParam'
+      responses:
+        '200': { content: { application/json: { schema: { $ref: '#/components/schemas/JobStatusResponse' } } }, description: Job status }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+  /tasks/audio-transcription/result/{jobId}:
+    get:
+      tags: [tasks]
+      summary: Get audio transcription result
+      parameters:
+        - $ref: '#/components/parameters/JobIdParam'
+      responses:
+        '200': { content: { application/json: { schema: { $ref: '#/components/schemas/AudioTranscriptionResult' } } }, description: Transcription result with MIDI URL }
+        '202': { $ref: '#/components/responses/JobNotReady' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /tasks/chord-recognition/enqueue:
+    post:
+      tags: [tasks]
+      summary: Enqueue chord recognition
+      description: Recognize chord progression from a MIDI transcription.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ChordRecognitionEnqueueForm'
+      responses:
+        '202': { content: { application/json: { schema: { $ref: '#/components/schemas/JobEnqueueResponse' } } }, description: Job enqueued }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '500': { $ref: '#/components/responses/ServerError' }
+  /tasks/chord-recognition/status/{jobId}:
+    get:
+      tags: [tasks]
+      summary: Get chord recognition job status
+      parameters:
+        - $ref: '#/components/parameters/JobIdParam'
+      responses:
+        '200': { content: { application/json: { schema: { $ref: '#/components/schemas/JobStatusResponse' } } }, description: Job status }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+  /tasks/chord-recognition/result/{jobId}:
+    get:
+      tags: [tasks]
+      summary: Get chord recognition result
+      parameters:
+        - $ref: '#/components/parameters/JobIdParam'
+      responses:
+        '200': { content: { application/json: { schema: { $ref: '#/components/schemas/ChordRecognitionResult' } } }, description: Chord progression result in text and/or AST }
+        '202': { $ref: '#/components/responses/JobNotReady' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /tasks/audio-reharmonization/enqueue:
+    post:
+      tags: [tasks]
+      summary: Enqueue audio chord reharmonization
+      description: Apply reharmonization rules to a MIDI transcription.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ReharmonizationEnqueueForm'
+      responses:
+        '202': { content: { application/json: { schema: { $ref: '#/components/schemas/JobEnqueueResponse' } } }, description: Job enqueued }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '500': { $ref: '#/components/responses/ServerError' }
+  /tasks/audio-reharmonization/status/{jobId}:
+    get:
+      tags: [tasks]
+      summary: Get reharmonization job status
+      parameters:
+        - $ref: '#/components/parameters/JobIdParam'
+      responses:
+        '200': { content: { application/json: { schema: { $ref: '#/components/schemas/JobStatusResponse' } } }, description: Job status }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+  /tasks/audio-reharmonization/result/{jobId}:
+    get:
+      tags: [tasks]
+      summary: Get reharmonization result
+      parameters:
+        - $ref: '#/components/parameters/JobIdParam'
+      responses:
+        '200': { content: { application/json: { schema: { $ref: '#/components/schemas/ReharmonizationResult' } } }, description: Reharmonized MIDI and optional chart }
+        '202': { $ref: '#/components/responses/JobNotReady' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /tasks/e2e-base/enqueue:
+    post:
+      tags: [tasks]
+      summary: Enqueue E2E base flow for reharmonization
+      description: Run separation, transcription, and chord recognition in sequence on an input audio file.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/E2EBaseEnqueueForm'
+      responses:
+        '202': { content: { application/json: { schema: { $ref: '#/components/schemas/JobEnqueueResponse' } } }, description: Job enqueued }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '500': { $ref: '#/components/responses/ServerError' }
+  /tasks/e2e-base/status/{jobId}:
+    get:
+      tags: [tasks]
+      summary: Get E2E base job status
+      parameters:
+        - $ref: '#/components/parameters/JobIdParam'
+      responses:
+        '200': { content: { application/json: { schema: { $ref: '#/components/schemas/JobStatusResponse' } } }, description: Job status }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+  /tasks/e2e-base/result/{jobId}:
+    get:
+      tags: [tasks]
+      summary: Get E2E base result
+      parameters:
+        - $ref: '#/components/parameters/JobIdParam'
+      responses:
+        '200': { content: { application/json: { schema: { $ref: '#/components/schemas/E2EBaseResult' } } }, description: Combined outputs }
+        '202': { $ref: '#/components/responses/JobNotReady' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /tasks/easier-chord-recommendation/enqueue:
+    post:
+      tags: [tasks]
+      summary: Enqueue easier chord recommendation
+      description: Suggest an easier chord progression for a target instrument.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EasierChordRecommendationRequest'
+      responses:
+        '202': { content: { application/json: { schema: { $ref: '#/components/schemas/JobEnqueueResponse' } } }, description: Job enqueued }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '500': { $ref: '#/components/responses/ServerError' }
+  /tasks/easier-chord-recommendation/status/{jobId}:
+    get:
+      tags: [tasks]
+      summary: Get easier chord recommendation job status
+      parameters:
+        - $ref: '#/components/parameters/JobIdParam'
+      responses:
+        '200': { content: { application/json: { schema: { $ref: '#/components/schemas/JobStatusResponse' } } }, description: Job status }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+  /tasks/easier-chord-recommendation/result/{jobId}:
+    get:
+      tags: [tasks]
+      summary: Get easier chord recommendation result
+      parameters:
+        - $ref: '#/components/parameters/JobIdParam'
+      responses:
+        '200': { content: { application/json: { schema: { $ref: '#/components/schemas/EasierChordRecommendationResult' } } }, description: Easier chord progression in text and/or AST }
+        '202': { $ref: '#/components/responses/JobNotReady' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /operations/alternative-chord-recommendation:
+    post:
+      tags: [operations]
+      summary: Alternative chord recommendation for a single chord index
+      description: Given a chord progression and index to substitute, returns a MIDI file with alternatives.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlternativeChordRecommendationRequest'
+      responses:
+        '200':
+          description: MIDI URL with recommended alternative(s)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlternativeChordRecommendationResult'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+components:
+  parameters:
+    JobIdParam:
+      name: jobId
+      in: path
+      required: true
+      schema: { type: string }
+      description: Unique job identifier returned by enqueue
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    UnsupportedMediaType:
+      description: Unsupported media type
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    JobNotReady:
+      description: Job is not completed yet
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/JobStatusResponse' }
+    ServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  schemas:
+    # ---------- Common ----------
+    Error:
+      type: object
+      properties:
+        code: { type: string, example: INVALID_INPUT }
+        message: { type: string }
+        details: { type: object, additionalProperties: true }
+      required: [code, message]
+
+    JobEnqueueResponse:
+      type: object
+      properties:
+        jobId: { type: string }
+        status:
+          type: string
+          enum: [queued]
+        queuedAt: { type: string, format: date-time }
+      required: [jobId, status]
+
+    JobStatusResponse:
+      type: object
+      properties:
+        jobId: { type: string }
+        status:
+          type: string
+          enum: [queued, processing, completed, failed]
+        progressPercent: { type: number, minimum: 0, maximum: 100 }
+        queuedAt: { type: string, format: date-time }
+        startedAt: { type: string, format: date-time, nullable: true }
+        updatedAt: { type: string, format: date-time }
+        completedAt: { type: string, format: date-time, nullable: true }
+        error: { $ref: '#/components/schemas/Error' }
+      required: [jobId, status]
+
+    InstrumentName:
+      type: string
+      description: Instrument to target; availability depends on installed models
+      example: piano
+
+    ChartFormat:
+      type: string
+      description: Output format selector for chord results
+      enum: [json, txt]
+      default: json
+
+    # ---------- Enqueue Request Forms ----------
+    AudioSeparationEnqueueForm:
+      type: object
+      properties:
+        file:
+          type: string
+          format: binary
+          description: Input audio file (ffmpeg-supported)
+        stems:
+          type: array
+          items: { type: string }
+          description: List of requested stems/instruments to separate
+          example: [vocals, drums, bass, other]
+      required: [file]
+
+    AudioTranscriptionEnqueueForm:
+      type: object
+      properties:
+        file:
+          type: string
+          format: binary
+          description: Input audio file (ffmpeg-supported)
+        instrument:
+          $ref: '#/components/schemas/InstrumentName'
+      required: [file, instrument]
+
+    ChordRecognitionEnqueueForm:
+      type: object
+      properties:
+        midi:
+          type: string
+          format: binary
+          description: Input transcription (.mid)
+        format:
+          $ref: '#/components/schemas/ChartFormat'
+      required: [midi]
+
+    ReharmonizationEnqueueForm:
+      type: object
+      properties:
+        midi:
+          type: string
+          format: binary
+          description: Input transcription (.mid)
+        rules:
+          type: object
+          additionalProperties: true
+          description: Reharmonization rules (LLM-guided or rule-based)
+      required: [midi]
+
+    E2EBaseEnqueueForm:
+      type: object
+      properties:
+        file:
+          type: string
+          format: binary
+          description: Base audio file (ffmpeg-supported)
+        instrument:
+          $ref: '#/components/schemas/InstrumentName'
+      required: [file, instrument]
+
+    EasierChordRecommendationRequest:
+      type: object
+      properties:
+        targetInstrument:
+          $ref: '#/components/schemas/InstrumentName'
+        input:
+          $ref: '#/components/schemas/ChordProgressionInput'
+        outputFormat:
+          $ref: '#/components/schemas/ChartFormat'
+      required: [targetInstrument, input]
+
+    # ---------- Results ----------
+    FileRef:
+      type: object
+      properties:
+        url: { type: string, format: uri }
+        mimeType: { type: string }
+        extension: { type: string }
+        sizeBytes: { type: integer, format: int64, nullable: true }
+        durationSeconds: { type: number, nullable: true }
+      required: [url]
+
+    AudioSeparationStem:
+      type: object
+      properties:
+        name: { type: string }
+        file: { $ref: '#/components/schemas/FileRef' }
+      required: [name, file]
+
+    AudioSeparationResult:
+      type: object
+      properties:
+        stems:
+          type: array
+          items: { $ref: '#/components/schemas/AudioSeparationStem' }
+      required: [stems]
+
+    AudioTranscriptionResult:
+      type: object
+      properties:
+        midi:
+          $ref: '#/components/schemas/FileRef'
+      required: [midi]
+
+    ChordRecognitionResult:
+      type: object
+      properties:
+        chartText:
+          type: string
+          description: LLM-Chart textual form when outputFormat=txt
+        chartAst:
+          $ref: '#/components/schemas/LLMChartSong'
+      oneOf:
+        - required: [chartText]
+        - required: [chartAst]
+
+    ReharmonizationResult:
+      type: object
+      properties:
+        midi: { $ref: '#/components/schemas/FileRef' }
+        chartText: { type: string, nullable: true }
+        chartAst: { $ref: '#/components/schemas/LLMChartSong' }
+      required: [midi]
+
+    E2EBaseResult:
+      type: object
+      properties:
+        midi: { $ref: '#/components/schemas/FileRef' }
+        separation:
+          type: array
+          items: { $ref: '#/components/schemas/AudioSeparationStem' }
+        chords:
+          $ref: '#/components/schemas/ChordRecognitionResult'
+      required: [midi, chords]
+
+    EasierChordRecommendationResult:
+      type: object
+      properties:
+        chartText: { type: string }
+        chartAst: { $ref: '#/components/schemas/LLMChartSong' }
+      oneOf:
+        - required: [chartText]
+        - required: [chartAst]
+
+    AlternativeChordRecommendationRequest:
+      type: object
+      properties:
+        input:
+          $ref: '#/components/schemas/ChordProgressionInput'
+        index:
+          type: integer
+          minimum: 0
+          description: Zero-based chord index to substitute
+      required: [input, index]
+
+    AlternativeChordRecommendationResult:
+      type: object
+      properties:
+        midi: { $ref: '#/components/schemas/FileRef' }
+      required: [midi]
+
+    # ---------- Chord Progression Input ----------
+    ChordProgressionInput:
+      description: Provide chord progression as text, AST, or a file URL
+      type: object
+      properties:
+        chartText: { type: string }
+        chartAst: { $ref: '#/components/schemas/LLMChartSong' }
+        fileUrl: { type: string, format: uri }
+      oneOf:
+        - required: [chartText]
+        - required: [chartAst]
+        - required: [fileUrl]
+
+    # ---------- LLM-Chart AST ----------
+    LLMChartSong:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [Song]
+        body:
+          type: array
+          items:
+            oneOf:
+              - $ref: '#/components/schemas/LLMChartAnnotation'
+              - $ref: '#/components/schemas/LLMChartMeasureLine'
+      required: [type, body]
+
+    LLMChartAnnotation:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [Annotation]
+        content: { type: string }
+      required: [type, content]
+
+    LLMChartMeasureLine:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [MeasureLine]
+        measures:
+          type: array
+          items:
+            oneOf:
+              - $ref: '#/components/schemas/LLMChartMeasure'
+              - $ref: '#/components/schemas/LLMChartRepeatMeasure'
+              - $ref: '#/components/schemas/LLMChartRepeatSection'
+      required: [type, measures]
+
+    LLMChartMeasure:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [Measure]
+        beats:
+          type: array
+          items: { $ref: '#/components/schemas/LLMChartBeatMarker' }
+      required: [type, beats]
+
+    LLMChartRepeatMeasure:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [RepeatMeasure]
+        count: { type: integer, minimum: 1 }
+      required: [type, count]
+
+    LLMChartRepeatSection:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [RepeatSection]
+        measures:
+          type: array
+          items: { $ref: '#/components/schemas/LLMChartMeasure' }
+        repeatCount: { type: integer, minimum: 1 }
+      required: [type, measures, repeatCount]
+
+    LLMChartBeatMarker:
+      oneOf:
+        - $ref: '#/components/schemas/LLMChartChord'
+        - $ref: '#/components/schemas/LLMChartTuplet'
+        - $ref: '#/components/schemas/LLMChartContinuation'
+
+    LLMChartChord:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [Chord]
+        root: { type: string, example: C }
+        quality: { type: string, example: maj7 }
+        bass: { type: string, nullable: true, example: G }
+      required: [type, root]
+
+    LLMChartTuplet:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [Tuplet]
+        chords:
+          type: array
+          items:
+            type: object
+            properties:
+              root: { type: string }
+              quality: { type: string }
+              bass: { type: string, nullable: true }
+            required: [root]
+      required: [type, chords]
+
+    LLMChartContinuation:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [Continuation]
+      required: [type]
+
+  examples:
+    LLMChartInputExample:
+      summary: LLM-Chart example (text)
+      value: |
+        {title: LLM-Chart Demo}
+        {key: C}
+        {time: 4/4}
+
+        {Verse 1}
+        | Cmaj7 . . G | (Am G F) C |
+        |: C | % :| x2
+
+

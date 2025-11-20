@@ -1,0 +1,44 @@
+[project]
+name = "hiscore"
+version = "0.1.0"
+description = "Audio to tablature transcription tool"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "torch",
+    "torchaudio",
+    "soundfile",
+    "librosa",
+    "numpy",
+    "scipy",
+    "pretty_midi",
+    "mido",
+    "demucs",
+    "onnxruntime",
+    "ml-collections",
+    "pyyaml",
+    "tqdm",
+    "pathlib",
+    "argparse",
+    "segmentation_models_pytorch",
+    "timm",
+    "lightning",
+    "transformers==4.45.1",
+    "numpy==1.26.4",
+    "pyrubberband",
+    "tensorboard",
+    "scipy",
+    "matplotlib",
+    "beartype",
+    "rotary-embedding-torch",
+    "einops",
+    "x-transformers",
+    "mir_eval",
+    "jams",
+    "wandb",
+    "gradio",
+    "python-dotenv",
+    "deprecated",
+    "onnx>=1.19.0",
+]
+
