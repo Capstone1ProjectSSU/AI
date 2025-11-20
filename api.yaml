@@ -1,0 +1,780 @@
+openapi: 3.0.3
+info:
+  title: HiScore Queueable Tasks and LLM-Chart API
+  version: 1.0.0
+  description: |
+    Formal API for long-running music processing tasks with a unified queueing interface,
+    plus immediate operations. Includes chord complexification with LLM and unified chord format.
+
+    ## Task Lifecycle
+    1. **Enqueue**: POST to `/tasks/{type}/enqueue` → Returns `JobEnqueueResponse` with jobId
+    2. **Status**: GET `/tasks/{type}/status/{jobId}` → Returns `JobStatusResponse` with progress
+    3. **Result**: GET `/tasks/{type}/result/{jobId}` → Returns task-specific result schema
+
+    ## Unified Chord Format
+    All chord tasks now return a unified format that includes:
+    - **Noten format**: LLM-friendly text-based notation
+    - **Time-chord pairs**: (time, chord, duration) for precise sequencing
+    - **AST representation**: Parsed structure for programmatic access
+
+servers:
+  - url: http://localhost:8000
+    description: Local development server
+
+tags:
+  - name: tasks
+    description: Queueable, long-running tasks exposed via enqueue/status/result endpoints
+  - name: operations
+    description: Immediate operations returning results synchronously
+  - name: llm-chart
+    description: LLM-Chart schemas and examples
+
+paths:
+  # ============================================
+  # Audio Separation
+  # ============================================
+  /tasks/audio-separation/enqueue:
+    post:
+      tags: [tasks]
+      summary: Enqueue audio separation
+      description: Separate instruments/stems from an input audio file using Demucs.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                audio_file:
+                  type: string
+                  format: binary
+                  description: Input audio file (mp3, wav, etc.)
+                instruments:
+                  type: string
+                  description: Comma-separated list of instruments (drums, bass, other, vocals)
+                  example: "piano,bass"
+              required: [audio_file, instruments]
+      responses:
+        '202':
+          description: Job enqueued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobEnqueueResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /tasks/audio-separation/status/{jobId}:
+    get:
+      tags: [tasks]
+      summary: Get audio separation job status
+      parameters:
+        - $ref: '#/components/parameters/JobIdParam'
+      responses:
+        '200':
+          description: Job status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobStatusResponse'
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /tasks/audio-separation/result/{jobId}:
+    get:
+      tags: [tasks]
+      summary: Get audio separation result
+      parameters:
+        - $ref: '#/components/parameters/JobIdParam'
+      responses:
+        '200':
+          description: Separation outputs with URLs to separated audio files
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AudioSeparationResult'
+        '202': { $ref: '#/components/responses/JobNotReady' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # ============================================
+  # Audio Transcription
+  # ============================================
+  /tasks/audio-transcription/enqueue:
+    post:
+      tags: [tasks]
+      summary: Enqueue audio transcription
+      description: Transcribe audio to MIDI using Basic Pitch or YourMT3.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                audio_file:
+                  type: string
+                  format: binary
+                  description: Input audio file
+                instrument:
+                  type: string
+                  description: Instrument name for transcription
+                  example: "piano"
+                engine:
+                  type: string
+                  description: Transcription engine
+                  enum: [basic-pitch, yourmt3]
+                  default: basic-pitch
+              required: [audio_file, instrument]
+      responses:
+        '202':
+          description: Job enqueued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobEnqueueResponse'
+
+  /tasks/audio-transcription/status/{jobId}:
+    get:
+      tags: [tasks]
+      summary: Get audio transcription job status
+      parameters:
+        - $ref: '#/components/parameters/JobIdParam'
+      responses:
+        '200':
+          description: Job status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobStatusResponse'
+
+  /tasks/audio-transcription/result/{jobId}:
+    get:
+      tags: [tasks]
+      summary: Get audio transcription result
+      parameters:
+        - $ref: '#/components/parameters/JobIdParam'
+      responses:
+        '200':
+          description: Transcription result with MIDI file URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AudioTranscriptionResult'
+        '202': { $ref: '#/components/responses/JobNotReady' }
+
+  # ============================================
+  # Chord Recognition
+  # ============================================
+  /tasks/chord-recognition/enqueue:
+    post:
+      tags: [tasks]
+      summary: Enqueue chord recognition
+      description: Detect chords from MIDI file with unified format output.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                midi_file:
+                  type: string
+                  format: binary
+                  description: Input MIDI file
+                format:
+                  $ref: '#/components/schemas/ChartFormat'
+              required: [midi_file]
+      responses:
+        '202':
+          description: Job enqueued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobEnqueueResponse'
+
+  /tasks/chord-recognition/status/{jobId}:
+    get:
+      tags: [tasks]
+      summary: Get chord recognition job status
+      parameters:
+        - $ref: '#/components/parameters/JobIdParam'
+      responses:
+        '200':
+          description: Job status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobStatusResponse'
+
+  /tasks/chord-recognition/result/{jobId}:
+    get:
+      tags: [tasks]
+      summary: Get chord recognition result
+      description: Returns chord progression with unified format (noten + time-chord pairs)
+      parameters:
+        - $ref: '#/components/parameters/JobIdParam'
+      responses:
+        '200':
+          description: Chord progression result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChordRecognitionResult'
+        '202': { $ref: '#/components/responses/JobNotReady' }
+
+  # ============================================
+  # E2E Base Ready for Reharmonization
+  # ============================================
+  /tasks/e2e-base-ready/enqueue:
+    post:
+      tags: [tasks]
+      summary: Enqueue E2E base ready pipeline
+      description: |
+        End-to-end pipeline: audio separation → transcription → chord recognition.
+        Produces MIDI, separated audio, and chord progression ready for reharmonization.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                audio_file:
+                  type: string
+                  format: binary
+                  description: Input audio file
+                instrument:
+                  type: string
+                  description: Target instrument
+                  example: "piano"
+              required: [audio_file, instrument]
+      responses:
+        '202':
+          description: Job enqueued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobEnqueueResponse'
+
+  /tasks/e2e-base-ready/status/{jobId}:
+    get:
+      tags: [tasks]
+      summary: Get E2E pipeline status
+      parameters:
+        - $ref: '#/components/parameters/JobIdParam'
+      responses:
+        '200':
+          description: Job status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobStatusResponse'
+
+  /tasks/e2e-base-ready/result/{jobId}:
+    get:
+      tags: [tasks]
+      summary: Get E2E pipeline result
+      parameters:
+        - $ref: '#/components/parameters/JobIdParam'
+      responses:
+        '200':
+          description: Complete pipeline output
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/E2EBaseResult'
+        '202': { $ref: '#/components/responses/JobNotReady' }
+
+  # ============================================
+  # Easier Chord Recommendation
+  # ============================================
+  /tasks/easier-chord-recommendation/enqueue:
+    post:
+      tags: [tasks]
+      summary: Enqueue easier chord recommendation
+      description: Suggest simpler chord alternatives for specific instruments based on difficulty.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                chord_file:
+                  type: string
+                  format: binary
+                  description: Input chord progression file (json or txt)
+                target_instrument:
+                  type: string
+                  description: Target instrument (guitar, piano, bass)
+                  example: "guitar"
+                format:
+                  $ref: '#/components/schemas/ChartFormat'
+              required: [chord_file, target_instrument]
+      responses:
+        '202':
+          description: Job enqueued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobEnqueueResponse'
+
+  /tasks/easier-chord-recommendation/status/{jobId}:
+    get:
+      tags: [tasks]
+      summary: Get easier chord recommendation status
+      parameters:
+        - $ref: '#/components/parameters/JobIdParam'
+      responses:
+        '200':
+          description: Job status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobStatusResponse'
+
+  /tasks/easier-chord-recommendation/result/{jobId}:
+    get:
+      tags: [tasks]
+      summary: Get easier chord recommendation result
+      parameters:
+        - $ref: '#/components/parameters/JobIdParam'
+      responses:
+        '200':
+          description: Easier chord progression with unified format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EasierChordResult'
+        '202': { $ref: '#/components/responses/JobNotReady' }
+
+  # ============================================
+  # Chord Complexification (NEW)
+  # ============================================
+  /tasks/chord-complexification/enqueue:
+    post:
+      tags: [tasks]
+      summary: Enqueue chord complexification
+      description: |
+        Use LLM to complexify chord progression with sophisticated extensions and substitutions.
+        Supports style-specific complexification (jazz, gospel, bossa nova, etc.).
+        Returns results in unified format with noten notation and time-chord pairs.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                chord_file:
+                  type: string
+                  format: binary
+                  description: Input chord progression file (json, txt, or noten)
+                target_style:
+                  type: string
+                  description: Target musical style for complexification
+                  example: "jazz"
+                  enum: [jazz, gospel, bossa nova, funk, r&b, neo-soul]
+                format:
+                  $ref: '#/components/schemas/ChartFormat'
+              required: [chord_file, target_style]
+      responses:
+        '202':
+          description: Job enqueued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobEnqueueResponse'
+        '400':
+          description: Missing ANTHROPIC_API_KEY or invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /tasks/chord-complexification/status/{jobId}:
+    get:
+      tags: [tasks]
+      summary: Get chord complexification status
+      parameters:
+        - $ref: '#/components/parameters/JobIdParam'
+      responses:
+        '200':
+          description: Job status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JobStatusResponse'
+
+  /tasks/chord-complexification/result/{jobId}:
+    get:
+      tags: [tasks]
+      summary: Get chord complexification result
+      description: Returns complexified progression with unified format
+      parameters:
+        - $ref: '#/components/parameters/JobIdParam'
+      responses:
+        '200':
+          description: Complexified chord progression
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChordComplexificationResult'
+        '202': { $ref: '#/components/responses/JobNotReady' }
+
+  # ============================================
+  # Alternative Chord Recommendation (Operation)
+  # ============================================
+  /operations/alternative-chord-recommendation:
+    post:
+      tags: [operations]
+      summary: Get alternative chord recommendations
+      description: Synchronous operation to get alternative chord suggestions for a specific position.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                chord_file:
+                  type: string
+                  format: binary
+                  description: Input chord progression file
+                chord_index:
+                  type: integer
+                  description: Index of the chord to substitute (0-based)
+                  example: 2
+              required: [chord_file, chord_index]
+      responses:
+        '200':
+          description: Alternative chord suggestions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlternativeChordResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  # ============================================
+  # Health Check
+  # ============================================
+  /health:
+    get:
+      summary: Health check
+      description: Returns service health status
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "healthy"
+                  service:
+                    type: string
+                    example: "hiserver"
+
+components:
+  parameters:
+    JobIdParam:
+      name: jobId
+      in: path
+      required: true
+      schema: { type: string }
+      description: Unique job identifier returned by enqueue
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    UnsupportedMediaType:
+      description: Unsupported media type
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    JobNotReady:
+      description: Job is not completed yet
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/JobStatusResponse' }
+    ServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+  schemas:
+    # ========== Common ==========
+    Error:
+      type: object
+      properties:
+        code: { type: string, example: INVALID_INPUT }
+        message: { type: string }
+        details: { type: object, additionalProperties: true }
+      required: [code, message]
+
+    JobEnqueueResponse:
+      type: object
+      properties:
+        jobId: { type: string }
+        status:
+          type: string
+          enum: [queued]
+        queuedAt: { type: string, format: date-time }
+      required: [jobId, status]
+
+    JobStatusResponse:
+      type: object
+      properties:
+        jobId: { type: string }
+        status:
+          type: string
+          enum: [queued, processing, completed, failed]
+        progressPercent: { type: number, minimum: 0, maximum: 100 }
+        queuedAt: { type: string, format: date-time }
+        startedAt: { type: string, format: date-time, nullable: true }
+        updatedAt: { type: string, format: date-time }
+        completedAt: { type: string, format: date-time, nullable: true }
+        error: { $ref: '#/components/schemas/Error' }
+      required: [jobId, status]
+
+    InstrumentName:
+      type: string
+      description: Instrument to target; availability depends on installed models
+      example: piano
+
+    ChartFormat:
+      type: string
+      description: Output format selector for chord results
+      enum: [json, txt, noten]
+      default: noten
+      example: noten
+
+    # ========== Unified Chord Format ==========
+    TimeChordPair:
+      type: object
+      description: A chord at a specific time with duration (in beats)
+      properties:
+        time:
+          type: number
+          description: Start time in beats
+          example: 0.0
+        chord:
+          type: string
+          description: Chord symbol
+          example: "Cmaj7"
+        duration:
+          type: number
+          description: Duration in beats
+          example: 2.0
+      required: [time, chord, duration]
+
+    UnifiedChordProgression:
+      type: object
+      description: |
+        Unified chord progression format containing multiple representations:
+        - Noten format (LLM-friendly text notation)
+        - Time-chord pairs (precise sequencing)
+        - AST (parsed structure)
+      properties:
+        key:
+          type: string
+          nullable: true
+          description: Key signature
+          example: "C major"
+        timeSignature:
+          type: string
+          nullable: true
+          description: Time signature
+          example: "4/4"
+        notenAst:
+          type: object
+          nullable: true
+          description: Parsed noten format AST
+          additionalProperties: true
+        notenString:
+          type: string
+          nullable: true
+          description: Noten format string representation
+          example: |
+            {key: C major}
+            {time: 4/4}
+
+            | Cmaj7 . . G7 | Am7 . Dm7 . |
+        timeChordPairs:
+          type: array
+          description: List of time-chord-duration tuples
+          items:
+            $ref: '#/components/schemas/TimeChordPair'
+      required: [timeChordPairs]
+
+    # ========== Audio Separation ==========
+    SeparatedAudio:
+      type: object
+      properties:
+        instrument: { type: string, example: "piano" }
+        url: { type: string, example: "/outputs/abc123/piano_separated.wav" }
+        format: { type: string, default: "wav" }
+      required: [instrument, url]
+
+    AudioSeparationResult:
+      type: object
+      properties:
+        jobId: { type: string }
+        outputs:
+          type: array
+          items:
+            $ref: '#/components/schemas/SeparatedAudio'
+      required: [jobId, outputs]
+
+    # ========== Audio Transcription ==========
+    AudioTranscriptionResult:
+      type: object
+      properties:
+        jobId: { type: string }
+        transcriptionUrl:
+          type: string
+          example: "/outputs/abc123/piano_transcription.mid"
+        format:
+          type: string
+          default: "mid"
+      required: [jobId, transcriptionUrl, format]
+
+    # ========== Chord Recognition ==========
+    ChordRecognitionResult:
+      type: object
+      properties:
+        jobId: { type: string }
+        chordProgressionUrl:
+          type: string
+          example: "/outputs/abc123/chord_progression.json"
+        format:
+          $ref: '#/components/schemas/ChartFormat'
+        unifiedProgression:
+          $ref: '#/components/schemas/UnifiedChordProgression'
+          nullable: true
+      required: [jobId, chordProgressionUrl, format]
+
+    # ========== E2E Base Ready ==========
+    E2EBaseResult:
+      type: object
+      properties:
+        jobId: { type: string }
+        transcriptionUrl:
+          type: string
+          example: "/outputs/abc123/piano_transcription.mid"
+        separatedAudioUrl:
+          type: string
+          example: "/outputs/abc123/piano_separated.wav"
+        chordProgressionUrl:
+          type: string
+          example: "/outputs/abc123/chord_progression.json"
+        format:
+          $ref: '#/components/schemas/ChartFormat'
+      required: [jobId, transcriptionUrl, separatedAudioUrl, chordProgressionUrl, format]
+
+    # ========== Easier Chord Recommendation ==========
+    EasierChordResult:
+      type: object
+      properties:
+        jobId: { type: string }
+        easierChordProgressionUrl:
+          type: string
+          example: "/outputs/abc123/easier_chord_progression.json"
+        format:
+          $ref: '#/components/schemas/ChartFormat'
+        unifiedProgression:
+          $ref: '#/components/schemas/UnifiedChordProgression'
+          nullable: true
+      required: [jobId, easierChordProgressionUrl, format]
+
+    # ========== Chord Complexification ==========
+    ChordComplexificationResult:
+      type: object
+      description: Result of LLM-based chord complexification
+      properties:
+        jobId: { type: string }
+        complexifiedChordProgressionUrl:
+          type: string
+          example: "/outputs/abc123/complexified_chord_progression.noten"
+        format:
+          $ref: '#/components/schemas/ChartFormat'
+        unifiedProgression:
+          $ref: '#/components/schemas/UnifiedChordProgression'
+          nullable: true
+          description: Unified format with noten and time-chord pairs
+      required: [jobId, complexifiedChordProgressionUrl, format]
+
+    # ========== Alternative Chord Recommendation ==========
+    AlternativeChord:
+      type: object
+      properties:
+        chord:
+          type: string
+          description: Alternative chord symbol
+          example: "Dm7"
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Confidence score
+          example: 0.85
+        reasoning:
+          type: string
+          description: Explanation for the suggestion
+          example: "Subdominant function with smooth voice leading"
+      required: [chord, confidence, reasoning]
+
+    AlternativeChordResponse:
+      type: object
+      properties:
+        originalChord:
+          type: string
+          example: "G"
+        alternatives:
+          type: array
+          items:
+            $ref: '#/components/schemas/AlternativeChord'
+          description: List of alternative chord suggestions (up to 5)
+      required: [originalChord, alternatives]
+
+    # ========== LLM-Chart Noten Format Examples ==========
+    NotenExample:
+      type: object
+      description: Example of noten format for LLM integration
+      example:
+        simple: |
+          {key: C major}
+          {time: 4/4}
+
+          {Verse}
+          | C . . G | Am . F . |
+
+          {Chorus}
+          | F . C . | G . Am . |
+
+        jazz: |
+          {key: Bb major}
+          {time: 4/4}
+
+          {A Section}
+          | Bbmaj7 . Gm7 . | Cm7 . F7 . |
+          | Dm7 . G7 . | Cm7 . F7 . |
+
+          {B Section}
+          | Ebmaj7 . Dm7 G7 | Cm7 . F7 . |
+
+        with_tuplets: |
+          {key: C major}
+          {time: 4/4}
+
+          | C . (G F Em) Dm7 | G7 . . . |

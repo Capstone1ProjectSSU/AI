@@ -1,0 +1,44 @@
+# FastAPI and server dependencies
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+celery==5.4.0
+redis==5.2.0
+pydantic==2.10.3
+pydantic-settings==2.6.1
+python-multipart==0.0.18
+aiofiles==24.1.0
+anthropic>=0.40.0
+
+# halmoni dependencies
+music21>=9.1.0
+mido>=1.3.0
+
+# hiscore dependencies
+torch
+torchaudio
+soundfile
+librosa
+numpy==1.26.4
+scipy
+pretty_midi
+demucs
+onnxruntime
+ml-collections
+pyyaml
+tqdm
+segmentation_models_pytorch
+timm
+lightning
+transformers==4.45.1
+pyrubberband
+tensorboard
+matplotlib
+beartype
+rotary-embedding-torch
+einops
+x-transformers
+mir_eval
+jams
+python-dotenv
+deprecated
+onnx>=1.19.0
