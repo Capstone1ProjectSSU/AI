@@ -135,7 +135,7 @@ def audio_transcription_task(self, file_path: str, instrument: str, engine: str 
         temp_folder = str(output_dir)
 
         if engine == "basic-pitch":
-            from basic_pitch_onnx import predict_basic_pitch
+            from hiscore.basic_pitch_onnx import predict_basic_pitch
             import mido
 
             self.update_progress(20, 100, "Loading Basic Pitch model")
@@ -149,10 +149,10 @@ def audio_transcription_task(self, file_path: str, instrument: str, engine: str 
             midi_path = output_dir / f"{instrument}_transcription.mid"
             midi_data.write(str(midi_path))
 
-            # Apply BPM detection
-            from hiscore.main import detect_bpm, apply_bpm_to_midi_file
-            bpm = detect_bpm(file_path)
-            apply_bpm_to_midi_file(str(midi_path), bpm)
+            # Apply BPM detection (temporarily disabled)
+            # from hiscore.main import detect_bpm, apply_bpm_to_midi_file
+            # bpm = detect_bpm(file_path)
+            # apply_bpm_to_midi_file(str(midi_path), bpm)
 
         elif engine == "yourmt3":
             self.update_progress(20, 100, "Loading YourMT3 model")

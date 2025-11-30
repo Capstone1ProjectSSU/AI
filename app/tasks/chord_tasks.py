@@ -51,13 +51,15 @@ def chord_recognition_task(self, midi_file_path: str, format: str = "json"):
 
         # Detect chords
         detector = ChordDetector()
-        time_windows = analyzer.get_time_windows(midi_data, window_size=1.0)
+        # get_time_windows expects a flat list of notes
+        all_notes = midi_data['notes']  # Already a flat list
+        time_windows = analyzer.get_time_windows(all_notes, window_size=1.0)
 
         chords = []
-        for window in time_windows:
-            notes = analyzer.group_simultaneous_notes(window['notes'])
+        for window_start, window_notes in time_windows:
+            notes = analyzer.group_simultaneous_notes(window_notes)
             if notes:
-                chord = detector.detect_chord(notes[0])
+                chord = detector.detect_chord_from_midi_notes(notes[0])
                 if chord:
                     chords.append(chord)
 
@@ -65,8 +67,7 @@ def chord_recognition_task(self, midi_file_path: str, format: str = "json"):
 
         # Detect key
         key_detector = KeyDetector()
-        all_notes = [note for track in midi_data['notes'] for note in track]
-        key = key_detector.detect_key(all_notes)
+        key, confidence = key_detector.detect_key_from_midi_notes(all_notes)
 
         self.update_progress(80, 100, "Creating chord progression")
 
@@ -144,22 +145,35 @@ def easier_chord_recommendation_task(
 
     self.update_progress(0, 100, "Loading chord progression")
 
+    def parse_key_string(key_str):
+        """Parse key string like 'G# Major' into Key object"""
+        from halmoni import Note
+        if not key_str:
+            return Key(Note('C', 4), 'major')
+        parts = key_str.strip().split()
+        if len(parts) == 2:
+            tonic_str, mode_str = parts
+            tonic = Note(tonic_str, 4)  # Use octave 4 as default
+            mode = mode_str.lower()
+            return Key(tonic, mode)
+        return Key(Note('C', 4), 'major')
+
     try:
         # Load chord progression
         with open(chord_file_path, 'r') as f:
             if format == "json":
                 data = json.load(f)
                 key_str = data.get('key')
-                key = Key.from_string(key_str) if key_str else Key('C', 'major')
+                key = parse_key_string(key_str)
                 chord_symbols = [c['symbol'] for c in data['chords']]
             else:
                 content = f.read()
                 lines = content.split('\n')
-                key = Key('C', 'major')
+                key = Key(Note('C', 4), 'major')
                 for line in lines:
                     if line.startswith('Key:'):
                         key_str = line.replace('Key:', '').strip()
-                        key = Key.from_string(key_str)
+                        key = parse_key_string(key_str)
                         break
                 chord_line = [l for l in lines if '-' in l][0] if any('-' in l for l in lines) else ''
                 chord_symbols = [c.strip() for c in chord_line.split('-')]
@@ -185,7 +199,8 @@ def easier_chord_recommendation_task(
         easier_chords = []
         for chord in chords:
             if difficulty_analyzer:
-                difficulty = difficulty_analyzer.analyze_chord(chord)
+                difficulty_info = difficulty_analyzer.analyze_chord_difficulty(chord)
+                difficulty = difficulty_info.get('difficulty_score', 0.0) / 10.0  # Normalize to 0-1
                 if difficulty > 0.7:  # If difficult, try to simplify
                     # Suggest simpler voicing or alternative
                     engine = ChordSuggestionEngine()
@@ -305,7 +320,7 @@ def e2e_base_ready_task(self, audio_file_path: str, instrument: str):
         # Step 2: Transcription
         self.update_progress(40, 100, "Transcribing audio")
 
-        from basic_pitch_onnx import predict_basic_pitch
+        from hiscore.basic_pitch_onnx import predict_basic_pitch
         model_path = os.path.join("hiscore", "basic-pitch", "basic_pitch", "saved_models", "icassp_2022", "nmp.onnx")
 
         _, midi_data, _ = predict_basic_pitch(str(separated_audio_path), model_path)
@@ -313,10 +328,10 @@ def e2e_base_ready_task(self, audio_file_path: str, instrument: str):
         midi_path = output_dir / f"{instrument}_transcription.mid"
         midi_data.write(str(midi_path))
 
-        # Apply BPM detection
-        from hiscore.main import detect_bpm, apply_bpm_to_midi_file
-        bpm = detect_bpm(str(separated_audio_path))
-        apply_bpm_to_midi_file(str(midi_path), bpm)
+        # Apply BPM detection (temporarily disabled)
+        # from hiscore.main import detect_bpm, apply_bpm_to_midi_file
+        # bpm = detect_bpm(str(separated_audio_path))
+        # apply_bpm_to_midi_file(str(midi_path), bpm)
 
         transcription_url = f'/outputs/{job_id}/{instrument}_transcription.mid'
 
@@ -327,19 +342,21 @@ def e2e_base_ready_task(self, audio_file_path: str, instrument: str):
         midi_data_analysis = analyzer.load_midi_file(str(midi_path))
 
         detector = ChordDetector()
-        time_windows = analyzer.get_time_windows(midi_data_analysis, window_size=1.0)
+        # get_time_windows expects a flat list of notes
+        all_notes_flat = midi_data_analysis['notes']  # Already a flat list
+        time_windows = analyzer.get_time_windows(all_notes_flat, window_size=1.0)
 
         chords = []
-        for window in time_windows:
-            notes = analyzer.group_simultaneous_notes(window['notes'])
+        for window_start, window_notes in time_windows:
+            notes = analyzer.group_simultaneous_notes(window_notes)
             if notes:
-                chord = detector.detect_chord(notes[0])
+                chord = detector.detect_chord_from_midi_notes(notes[0])
                 if chord:
                     chords.append(chord)
 
         key_detector = KeyDetector()
-        all_notes = [note for track in midi_data_analysis['notes'] for note in track]
-        key = key_detector.detect_key(all_notes)
+        all_notes = all_notes_flat
+        key, confidence = key_detector.detect_key_from_midi_notes(all_notes)
 
         progression = ChordProgression(chords=chords, key=key)
 
